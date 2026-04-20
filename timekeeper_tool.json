@@ -80,7 +80,7 @@
     },
     {
       "name": "schedule_wakeup",
-      "description": "Schedule a wakeup ping. After in_seconds, the timekeeper sends a Telegram message containing your provided message text to the user's chat. Your Telegram extension delivers it back to you as a normal incoming message, prompting you to act. Use whenever the user says 'check back in X', 'remind me', 'work for an hour and check in', or whenever you need to pause then resume work after a delay. Optionally bind to a task with task_id.",
+      "description": "Schedule a wakeup ping. After in_seconds, the timekeeper fires the wakeup via the configured delivery mode (wakeup_mode in config: 'telegram', 'openclaw_run', 'webhook', or 'all'). The 'openclaw_run' mode spawns `openclaw run <message>` locally, which is the most reliable way to wake you up because it invokes a fresh openclaw session directly on the homelab rather than depending on a Telegram round-trip. Use whenever the user says 'check back in X', 'remind me', 'work for an hour and check in', or whenever you need to pause then resume work after a delay. Optionally bind to a task with task_id.",
       "method": "POST",
       "path": "/wakeups",
       "parameters": [

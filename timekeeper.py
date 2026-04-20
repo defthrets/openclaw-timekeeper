@@ -42,7 +42,10 @@ DEFAULT_CONFIG = {
     "wakeup_check_interval_seconds": 2,
     "default_task_ttl_seconds": 3600,
     "max_history": 500,
-    "wakeup_message_prefix": "[TIMEKEEPER WAKEUP]",
+    "wakeup_message_prefix": "@clawd WAKEUP — please reply now",
+    "wakeup_mode": "telegram",
+    "wakeup_webhook_url": "",
+    "openclaw_binary": "openclaw",
 }
 
 START_TIME = time.time()
@@ -122,7 +125,7 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-# ─── TELEGRAM ─────────────────────────────────────────────
+# ─── DELIVERY CHANNELS ────────────────────────────────────
 async def send_telegram(text: str) -> dict:
     token = CONFIG.get("telegram_bot_token", "")
     chat_id = CONFIG.get("telegram_chat_id", "")
@@ -140,6 +143,43 @@ async def send_telegram(text: str) -> dict:
             return {"sent": ok, "status_code": r.status_code, "response": body}
     except Exception as e:
         _log(f"telegram send failed: {e}")
+        return {"sent": False, "reason": str(e)}
+
+
+async def spawn_openclaw_run(message: str) -> dict:
+    """Invoke `openclaw run <message>` as a detached subprocess so clawd
+    actually wakes up and processes the prompt, independent of Telegram."""
+    binary = CONFIG.get("openclaw_binary", "openclaw")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            binary, "run", message,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            stdin=asyncio.subprocess.DEVNULL,
+        )
+        return {"sent": True, "pid": proc.pid, "binary": binary}
+    except FileNotFoundError:
+        _log(f"openclaw binary not found: {binary}")
+        return {"sent": False, "reason": f"binary_not_found:{binary}"}
+    except Exception as e:
+        _log(f"openclaw run spawn failed: {e}")
+        return {"sent": False, "reason": str(e)}
+
+
+async def send_webhook(payload: dict) -> dict:
+    url = CONFIG.get("wakeup_webhook_url", "")
+    if not url:
+        return {"sent": False, "reason": "webhook_not_configured"}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json=payload)
+            return {
+                "sent": 200 <= r.status_code < 300,
+                "status_code": r.status_code,
+                "body": r.text[:500],
+            }
+    except Exception as e:
+        _log(f"webhook send failed: {e}")
         return {"sent": False, "reason": str(e)}
 
 
@@ -189,26 +229,55 @@ async def scheduler_loop():
                 tid = w.get("task_id")
                 if tid and tid in TASKS:
                     task_label = f"\nTask: {TASKS[tid].get('name', '')}"
+                prefix = CONFIG.get("wakeup_message_prefix", "@clawd WAKEUP — please reply now")
                 text = (
-                    f"{CONFIG.get('wakeup_message_prefix', '[TIMEKEEPER WAKEUP]')}"
+                    f"{prefix}"
                     f"{task_label}\n"
                     f"Message: {w.get('message', '')}\n"
                     f"Time: {_iso(_now())}\n"
                     f"Wakeup ID: {w['id']}\n"
-                    f"(reply to this to continue work)"
+                    f"(reply here to continue the task)"
                 )
-                send_result = await send_telegram(text)
+                spawn_message = (
+                    f"{prefix}{task_label}\n"
+                    f"{w.get('message', '')}\n"
+                    f"(wakeup {w['id']}, scheduled at {w.get('created_at')})"
+                )
+                payload = {
+                    "event": "wakeup",
+                    "wakeup_id": w["id"],
+                    "message": w.get("message", ""),
+                    "task_id": tid,
+                    "task_name": TASKS[tid].get("name") if tid and tid in TASKS else None,
+                    "fired_at": _iso(_now()),
+                    "text": text,
+                }
+                mode = str(CONFIG.get("wakeup_mode", "telegram")).lower()
+                results = {}
+                if mode in ("telegram", "all"):
+                    results["telegram"] = await send_telegram(text)
+                if mode in ("openclaw_run", "all"):
+                    results["openclaw_run"] = await spawn_openclaw_run(spawn_message)
+                if mode in ("webhook", "all"):
+                    results["webhook"] = await send_webhook(payload)
+                if not results:
+                    results["noop"] = {"sent": False, "reason": f"unknown_mode:{mode}"}
                 w["fired"] = True
                 w["fired_at"] = _iso(_now())
-                w["send_result"] = send_result
+                w["send_result"] = results
+                w["delivery_mode"] = mode
                 _append_history({
                     "event": "wakeup_fired",
                     "wakeup_id": w["id"],
                     "message": w.get("message"),
                     "at": _iso(_now()),
-                    "telegram_sent": send_result.get("sent"),
+                    "mode": mode,
+                    "results": {k: v.get("sent") for k, v in results.items()},
                 })
-                _log(f"wakeup {w['id']} fired, telegram_sent={send_result.get('sent')}")
+                sent_summary = ",".join(
+                    f"{k}={v.get('sent')}" for k, v in results.items()
+                )
+                _log(f"wakeup {w['id']} fired mode={mode} {sent_summary}")
             if due:
                 _save_json(WAKEUPS_FILE, WAKEUPS)
         except Exception as e:

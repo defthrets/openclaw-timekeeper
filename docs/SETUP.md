@@ -3,7 +3,7 @@
 ## What it does
 - `get_time` for clawd whenever he needs to know the current time
 - Persistent task tracker so long autonomous runs don't lose context
-- Wakeup pings delivered via Telegram - fires a message into clawd's chat at a scheduled time, and his telegram extension picks it up as a normal incoming message
+- Wakeup pings with three delivery modes: `telegram`, `openclaw_run` (spawn fresh clawd session directly), `webhook`, or `all` — see [Wakeup delivery modes](#wakeup-delivery-modes)
 - Local web UI to inspect tasks, wakeups, settings, event log
 
 ## Local development (Windows / Linux / macOS)
@@ -54,6 +54,28 @@ curl "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -m json.tool
 After editing config: `sudo systemctl restart openclaw-timekeeper`.
 
 Without telegram configured, wakeups still queue and fire on schedule - they just don't push a notification (you'd have to poll `/api/wakeups` to know).
+
+## Wakeup delivery modes
+
+Set `wakeup_mode` in `config.json` (or SETTINGS tab) to pick how fired wakeups reach clawd:
+
+| Mode | What happens | When to use |
+|---|---|---|
+| `telegram` (default) | Sends a Telegram message to the configured chat. Clawd's telegram extension picks it up as an incoming message. | You already have clawd's telegram extension running and trust the round-trip. |
+| `openclaw_run` | Spawns `openclaw run "<message>"` locally as a detached subprocess. Invokes a fresh clawd session directly on the homelab. | Most reliable — bypasses Telegram entirely. Matches how `presence_scanner` triggers clawd via cron. Recommended for unattended autonomous runs. |
+| `webhook` | POSTs a JSON payload (`wakeup_id`, `message`, `task_id`, `text`, ...) to `wakeup_webhook_url`. | You have a custom HTTP endpoint that should handle wakeups (e.g. a queue, Home Assistant, n8n). |
+| `all` | Fires all three in sequence. | Maximum redundancy — use if you want Telegram as a visible audit trail *and* `openclaw run` as the guaranteed trigger. |
+
+Example config for the recommended unattended setup:
+
+```json
+{
+  "wakeup_mode": "openclaw_run",
+  "openclaw_binary": "openclaw"
+}
+```
+
+If `openclaw` isn't on PATH for the systemd service, set `openclaw_binary` to the absolute path (e.g. `/usr/local/bin/openclaw` or `/home/michael/.npm-global/bin/openclaw`).
 
 ## Register the tool with openclaw
 
@@ -151,4 +173,15 @@ curl -X POST http://127.0.0.1:7779/api/wakeups \
 # If wakeup doesn't deliver to telegram:
 # - check /api/status shows "telegram_configured": true
 # - check daemon.log for "telegram send failed: ..."
+
+# If openclaw_run mode fails:
+# - check daemon.log for "openclaw binary not found" or spawn errors
+# - verify the systemd unit PATH includes wherever `openclaw` lives
+#   (add Environment="PATH=/usr/local/bin:/usr/bin:/home/michael/.npm-global/bin")
+#   or set "openclaw_binary" to an absolute path in config.json
+
+# Inspect per-wakeup delivery results (since v1.1, wakeups record which
+# channels reported success):
+cat ~/.openclaw/timekeeper/db/wakeups.json | python3 -m json.tool
+# look at wakeup.send_result.{telegram|openclaw_run|webhook}.sent
 ```
