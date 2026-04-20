@@ -1,0 +1,111 @@
+{
+  "name": "timekeeper",
+  "description": "Keeps you (clawd) aware of the current time, tracks tasks you are working on so you do not lose them across long autonomous runs, and lets you schedule wakeup pings that arrive as Telegram messages so you can pause work and resume later. Use start_task at the beginning of any non-trivial task, heartbeat periodically while working, complete_task when done, and schedule_wakeup whenever the user says 'check back in X seconds/minutes' or you need to resume work after a delay. You do not have a reliable internal clock — call get_time whenever you need to know the current time.",
+  "version": "1.0.0",
+  "type": "rest_api",
+  "base_url": "http://127.0.0.1:7779/api",
+  "actions": [
+    {
+      "name": "get_time",
+      "description": "Get the current date, time, day of week, and timezone. Call this whenever you need to know what time it is — you do not have reliable access to the current time on your own.",
+      "method": "GET",
+      "path": "/time"
+    },
+    {
+      "name": "get_status",
+      "description": "Snapshot of timekeeper state: active task count, pending wakeup count, telegram configuration status, daemon uptime. Call to verify the timekeeper is running and configured before scheduling wakeups.",
+      "method": "GET",
+      "path": "/status"
+    },
+    {
+      "name": "start_task",
+      "description": "Begin tracking a new task. Call at the beginning of any task that will take more than a few seconds, or any autonomous run. The returned id should be stored and used in subsequent heartbeat and complete_task calls. ttl_seconds defaults to 3600 (one hour).",
+      "method": "POST",
+      "path": "/tasks",
+      "parameters": [
+        {"name": "name", "in": "body", "description": "Short name of the task (e.g. 'Refactor auth module', 'Monitor logs overnight').", "required": true},
+        {"name": "description", "in": "body", "description": "Optional longer description or goal of the task.", "required": false},
+        {"name": "ttl_seconds", "in": "body", "description": "How long without a heartbeat before the task is considered stale. Default 3600.", "required": false},
+        {"name": "expected_duration_seconds", "in": "body", "description": "Your best estimate of how long this task will take. Used for planning wakeups.", "required": false}
+      ]
+    },
+    {
+      "name": "list_tasks",
+      "description": "List your current tasks. Call at the start of a session to see what was in progress, or during long runs to confirm what you should be working on. Defaults to active tasks only.",
+      "method": "GET",
+      "path": "/tasks",
+      "parameters": [
+        {"name": "status", "in": "query", "description": "Filter: 'active' (default), 'completed', or 'all'.", "required": false}
+      ]
+    },
+    {
+      "name": "get_task",
+      "description": "Get details for one task by id, including elapsed time and seconds until the ttl expires.",
+      "method": "GET",
+      "path": "/tasks/{id}",
+      "parameters": [
+        {"name": "id", "in": "path", "description": "Task id from start_task.", "required": true}
+      ]
+    },
+    {
+      "name": "heartbeat",
+      "description": "Update a task to show progress and prevent it from going stale. Call periodically during long tasks (e.g. every few minutes). Optionally include a progress_note describing what you just did, or extend_ttl_seconds to add more time to the deadline.",
+      "method": "POST",
+      "path": "/tasks/{id}/heartbeat",
+      "parameters": [
+        {"name": "id", "in": "path", "description": "Task id.", "required": true},
+        {"name": "progress_note", "in": "body", "description": "Optional note describing recent progress.", "required": false},
+        {"name": "extend_ttl_seconds", "in": "body", "description": "Add this many seconds to the task ttl.", "required": false}
+      ]
+    },
+    {
+      "name": "complete_task",
+      "description": "Mark a task as complete. Always call this when you finish a tracked task so it does not stay open.",
+      "method": "POST",
+      "path": "/tasks/{id}/complete",
+      "parameters": [
+        {"name": "id", "in": "path", "description": "Task id.", "required": true},
+        {"name": "result", "in": "body", "description": "Short summary of the outcome.", "required": false},
+        {"name": "note", "in": "body", "description": "Optional final note.", "required": false}
+      ]
+    },
+    {
+      "name": "delete_task",
+      "description": "Delete a task entirely. Use only if you want to drop a task without recording completion (e.g. mistaken creation).",
+      "method": "DELETE",
+      "path": "/tasks/{id}",
+      "parameters": [
+        {"name": "id", "in": "path", "description": "Task id.", "required": true}
+      ]
+    },
+    {
+      "name": "schedule_wakeup",
+      "description": "Schedule a wakeup ping. After in_seconds, the timekeeper sends a Telegram message containing your provided message text to the user's chat. Your Telegram extension delivers it back to you as a normal incoming message, prompting you to act. Use whenever the user says 'check back in X', 'remind me', 'work for an hour and check in', or whenever you need to pause then resume work after a delay. Optionally bind to a task with task_id.",
+      "method": "POST",
+      "path": "/wakeups",
+      "parameters": [
+        {"name": "in_seconds", "in": "body", "description": "Seconds from now to fire the wakeup. Minimum 1.", "required": true},
+        {"name": "message", "in": "body", "description": "The message the wakeup should deliver to you. Make it actionable, e.g. 'Resume code review of auth.py' or 'Check on user about dinner plans'.", "required": true},
+        {"name": "task_id", "in": "body", "description": "Optional task id this wakeup is associated with.", "required": false}
+      ]
+    },
+    {
+      "name": "list_wakeups",
+      "description": "List pending (or all) wakeups. Call to confirm what is scheduled before adding more.",
+      "method": "GET",
+      "path": "/wakeups",
+      "parameters": [
+        {"name": "include_fired", "in": "query", "description": "Set true to include already-fired wakeups.", "required": false}
+      ]
+    },
+    {
+      "name": "cancel_wakeup",
+      "description": "Cancel a pending wakeup by id. Use if a planned check-in is no longer needed.",
+      "method": "DELETE",
+      "path": "/wakeups/{id}",
+      "parameters": [
+        {"name": "id", "in": "path", "description": "Wakeup id.", "required": true}
+      ]
+    }
+  ]
+}

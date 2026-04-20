@@ -1,0 +1,22 @@
+[Unit]
+Description=OpenClaw Timekeeper Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=michael
+WorkingDirectory=/home/michael/.openclaw/timekeeper
+ExecStart=/usr/bin/python3 /home/michael/.openclaw/timekeeper/timekeeper.py
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-timekeeper
+
+# Safety limits
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

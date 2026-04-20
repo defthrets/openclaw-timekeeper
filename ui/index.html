@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenClaw Timekeeper</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1>&#9670; OPENCLAW TIMEKEEPER</h1>
+    <div id="quick-status" class="quick-status">--</div>
+  </header>
+  <nav>
+    <button data-tab="status" class="active">STATUS</button>
+    <button data-tab="tasks">TASKS</button>
+    <button data-tab="wakeups">WAKEUPS</button>
+    <button data-tab="settings">SETTINGS</button>
+    <button data-tab="log">LOG</button>
+  </nav>
+  <main>
+    <section id="tab-status" class="tab active"></section>
+    <section id="tab-tasks" class="tab"></section>
+    <section id="tab-wakeups" class="tab"></section>
+    <section id="tab-settings" class="tab"></section>
+    <section id="tab-log" class="tab"></section>
+  </main>
+  <footer>
+    <span id="footer-meta">timekeeper.ui v1</span>
+    <span id="footer-conn" class="conn-ok">&#9679; CONNECTED</span>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>

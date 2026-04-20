@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "timekeeper",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["C:/Users/mmidd/Documents/openclaw-timekeeper/timekeeper.py"],
+      "port": 7779
+    }
+  ]
+}
