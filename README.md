@@ -38,3 +38,6 @@ git clone <this repo> ~/openclaw-timekeeper
 cd ~/openclaw-timekeeper
 bash install.sh
 ```
+
+---
+*Co-authored by Clawd <clawd@qloak.me>
