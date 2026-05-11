@@ -40,4 +40,3 @@ bash install.sh
 ```
 
 ---
-*Co-authored by Clawd <clawd@qloak.me>
